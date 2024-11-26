@@ -1,7 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ElectiveXCharacter.h"
-#include "ElectiveXProjectile.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -9,6 +8,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "TimeRewindComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/LocalPlayer.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -60,12 +61,16 @@ void AElectiveXCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AElectiveXCharacter::Look);
+		
+		// Rewind
+		EnhancedInputComponent->BindAction(RewindAction, ETriggerEvent::Triggered, this, &AElectiveXCharacter::Rewind);
 	}
 	else
 	{
 		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
 }
+
 
 
 void AElectiveXCharacter::Move(const FInputActionValue& Value)
@@ -91,5 +96,24 @@ void AElectiveXCharacter::Look(const FInputActionValue& Value)
 		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
+	}
+}
+
+void AElectiveXCharacter::Rewind()
+{
+	UWorld* World = GetWorld();
+
+	if (!World) return;
+
+	TArray<AActor*> AllActors;
+	UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), AllActors);
+
+	for (AActor* Actor : AllActors)
+	{
+		if (!Actor) continue;
+
+		UTimeRewindComponent* RewindComp = Actor->FindComponentByClass<UTimeRewindComponent>();
+		if (RewindComp)
+			RewindComp->StartTimeRewind();
 	}
 }
