@@ -52,6 +52,17 @@ public:
 	/** Time Rewind Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* RewindAction;
+	
+	UPROPERTY(EditAnywhere, Category = "Time Rewind")
+	float RewindCooldownDuration = 5.0f;  // Cooldown duration in seconds
+
+	UPROPERTY(EditAnywhere, Category = "Time Rewind")
+	TSubclassOf<UCameraShakeBase> RewindCameraShake;
+
+	FTimerHandle RewindCooldownTimerHandle;
+
+	UFUNCTION(BlueprintCallable)
+	void OnRewindSuccessful();
 
 protected:
 	/** Called for movement input */

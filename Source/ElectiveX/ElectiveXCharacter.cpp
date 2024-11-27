@@ -101,19 +101,79 @@ void AElectiveXCharacter::Look(const FInputActionValue& Value)
 
 void AElectiveXCharacter::Rewind()
 {
-	UWorld* World = GetWorld();
+	UE_LOG(LogTemp, Log, TEXT("Rewind start"));
 
+	// Cooldown check
+	if (GetWorld()->GetTimerManager().IsTimerActive(RewindCooldownTimerHandle))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("This is a debug message!"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
 	if (!World) return;
 
-	TArray<AActor*> AllActors;
-	UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), AllActors);
+	// Optional: Limit the search to actors within a certain radius
+	FVector PlayerLocation = GetActorLocation();
+	float RewindRadius = 5000.0f; // Adjust as needed
 
-	for (AActor* Actor : AllActors)
+	TArray<AActor*> OverlappingActors;
+	UGameplayStatics::GetAllActorsWithTag(
+		World, 
+		FName("Rewindable"),
+		OverlappingActors
+	);
+
+	int32 RewindedActorsCount = 0;
+	for (AActor* Actor : OverlappingActors)
 	{
 		if (!Actor) continue;
 
+		// Optional: Distance check
+		if (FVector::Distance(Actor->GetActorLocation(), PlayerLocation) > RewindRadius)
+		{
+			continue;
+		}
+
 		UTimeRewindComponent* RewindComp = Actor->FindComponentByClass<UTimeRewindComponent>();
 		if (RewindComp)
+		{
 			RewindComp->StartTimeRewind();
+			RewindedActorsCount++;
+		}
 	}
+
+	// Only start cooldown if at least one actor was rewound
+	if (RewindedActorsCount > 0)
+	{
+		// Start cooldown timer
+		GetWorld()->GetTimerManager().SetTimer(
+			RewindCooldownTimerHandle, 
+			RewindCooldownDuration, 
+			false  // Does not loop
+		);
+
+		// Optional: Add any additional effects (screen flash, sound, etc.)
+		OnRewindSuccessful();
+	}
+}
+
+void AElectiveXCharacter::OnRewindSuccessful()
+{
+	;
+	// Optional: Add screen effects, sounds, etc.
+	if (RewindCameraShake)
+	{
+		GetWorld()->GetFirstPlayerController()->PlayerCameraManager->StartCameraShake(RewindCameraShake);
+	}
+
+	// USoundBase* RewindSound;
+	// // Play rewind sound
+	// if (RewindSound)
+	// {
+	// 	UGameplayStatics::PlaySound2D(this, RewindSound);
+	// }
+
+	// Optional visual feedback
+	// This could be a screen flash, particle effect, etc.
 }
