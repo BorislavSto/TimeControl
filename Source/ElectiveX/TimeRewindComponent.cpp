@@ -10,7 +10,6 @@ void UTimeRewindComponent::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Ensure we have a valid owner
     AActor* Owner = GetOwner();
     if (!Owner)
     {
@@ -18,7 +17,6 @@ void UTimeRewindComponent::BeginPlay()
         return;
     }
 
-    // Initial setup
     TimeHistory.Reserve(MaxHistoryStates);
 }
 
@@ -30,7 +28,7 @@ void UTimeRewindComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
     if (!Owner)
         return;
 
-    // Record states periodically
+    // Record states
     if (!bIsRewinding)
     {
         RecordTimer += DeltaTime;
@@ -58,6 +56,7 @@ void UTimeRewindComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
         if (TimeHistory.IsValidIndex(TargetIndex))
         {
             InterpolateToState(TimeHistory[TargetIndex]);
+            TimeHistory.Pop(); // Remove the used state
         }
 
         // Stop rewinding when transition is complete
