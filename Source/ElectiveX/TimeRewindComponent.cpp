@@ -1,9 +1,17 @@
 #include "TimeRewindComponent.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/CharacterMovementComponent.h"
+
+float RewindHistoryDuration;
 
 UTimeRewindComponent::UTimeRewindComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
+    
+    RewindDuration = 4.0f;
+    RewindHistoryDuration = 4.0f;
+    RecordInterval = 0.016f;
+    MaxHistoryStates = FMath::CeilToInt(RewindHistoryDuration / RecordInterval);
 }
 
 void UTimeRewindComponent::BeginPlay()
@@ -18,6 +26,7 @@ void UTimeRewindComponent::BeginPlay()
     }
 
     TimeHistory.Reserve(MaxHistoryStates);
+    OriginalHistory.Reserve(MaxHistoryStates);
 }
 
 void UTimeRewindComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -28,17 +37,16 @@ void UTimeRewindComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
     if (!Owner)
         return;
 
-    // Record states
     if (!bIsRewinding)
     {
+        // Only record new states when not rewinding
         RecordTimer += DeltaTime;
         if (RecordTimer >= RecordInterval)
         {
             RecordState();
             RecordTimer = 0.0f;
 
-            // Maintain fixed history size
-            if (TimeHistory.Num() > MaxHistoryStates)
+            while (TimeHistory.Num() > MaxHistoryStates)
             {
                 TimeHistory.RemoveAt(0);
             }
@@ -46,25 +54,38 @@ void UTimeRewindComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
     }
     else
     {
-        // Rewind logic
-        RewindProgress += DeltaTime;
-        float NormalizedProgress = FMath::Clamp(RewindProgress / RewindTransitionTime, 0.0f, 1.0f);
-
-        // Find the target state to rewind to
-        int32 TargetIndex = FMath::FloorToInt(TimeHistory.Num() * (1.0f - (RewindDuration / (MaxHistoryStates * RecordInterval))));
+        RewindProgress += DeltaTime / RewindDuration;
         
-        if (TimeHistory.IsValidIndex(TargetIndex))
-        {
-            InterpolateToState(TimeHistory[TargetIndex]);
-            TimeHistory.Pop(); // Remove the used state
-        }
-
-        // Stop rewinding when transition is complete
-        if (NormalizedProgress >= 1.0f)
+        if (RewindProgress >= 1.0f)
         {
             StopTimeRewind();
+            return;
+        }
+
+        float targetTime = RewindStartTime - (RewindProgress * RewindHistoryDuration);
+        FTimeState* TargetState = FindStateAtTime(targetTime);
+        
+        if (TargetState)
+        {
+            InterpolateToState(*TargetState);
         }
     }
+}
+
+FTimeState* UTimeRewindComponent::FindStateAtTime(float TargetTime)
+{
+    if (OriginalHistory.Num() == 0)
+        return nullptr;
+
+    for (int32 i = OriginalHistory.Num() - 1; i >= 0; --i)
+    {
+        if (OriginalHistory[i].Timestamp <= TargetTime)
+        {
+            return &OriginalHistory[i];
+        }
+    }
+
+    return &OriginalHistory[0];
 }
 
 void UTimeRewindComponent::RecordState()
@@ -75,18 +96,25 @@ void UTimeRewindComponent::RecordState()
 
     FTimeState NewState;
     NewState.Transform = Owner->GetActorTransform();
-    
-    // Try to get velocity if the owner is a movable object
-    UPrimitiveComponent* PrimitiveComp = Cast<UPrimitiveComponent>(Owner->GetRootComponent());
-    if (PrimitiveComp && PrimitiveComp->IsSimulatingPhysics())
+
+
+    UCharacterMovementComponent* MovementComponent = Cast<UCharacterMovementComponent>(Owner->GetComponentByClass(UCharacterMovementComponent::StaticClass()));
+    if (MovementComponent)
     {
-        NewState.Velocity = PrimitiveComp->GetPhysicsLinearVelocity();
+        NewState.Velocity = MovementComponent->Velocity;
+        UE_LOG(LogTemp, Log, TEXT("Velocity: %s, Size: %.2f"), *NewState.Velocity.ToString(), NewState.Velocity.Size());
+        NewState.bWasMoving = NewState.Velocity.Size() > 1.0f;
+        UE_LOG(LogTemp, Log, TEXT("bWasMoving: %s"), NewState.bWasMoving ? TEXT("true") : TEXT("false"));
+    }
+    else
+    {
+        NewState.bWasMoving = false;
     }
     
     NewState.Timestamp = GetWorld()->GetTimeSeconds();
-    
     TimeHistory.Add(NewState);
 }
+
 
 void UTimeRewindComponent::InterpolateToState(const FTimeState& TargetState)
 {
@@ -94,21 +122,30 @@ void UTimeRewindComponent::InterpolateToState(const FTimeState& TargetState)
     if (!Owner)
         return;
 
-    // Interpolate transform
     FTransform CurrentTransform = Owner->GetActorTransform();
     FTransform InterpolatedTransform = FTransform::Identity;
-    InterpolatedTransform.Blend(CurrentTransform, TargetState.Transform, RewindProgress / RewindTransitionTime);
+    
+    float Alpha = FMath::SmoothStep(0.0f, 1.0f, RewindProgress);
+    InterpolatedTransform.Blend(CurrentTransform, TargetState.Transform, Alpha);
     
     Owner->SetActorTransform(InterpolatedTransform);
 
-    // Interpolate velocity for physics objects
     UPrimitiveComponent* PrimitiveComp = Cast<UPrimitiveComponent>(Owner->GetRootComponent());
     if (PrimitiveComp && PrimitiveComp->IsSimulatingPhysics())
     {
         FVector CurrentVelocity = PrimitiveComp->GetPhysicsLinearVelocity();
-        FVector InterpolatedVelocity = FMath::Lerp(CurrentVelocity, TargetState.Velocity, RewindProgress / RewindTransitionTime);
+        FVector InterpolatedVelocity = FMath::Lerp(CurrentVelocity, TargetState.Velocity, Alpha);
         
         PrimitiveComp->SetPhysicsLinearVelocity(InterpolatedVelocity);
+    }
+
+    if (TargetState.bWasMoving)
+    {
+        bIsMoving = true;
+    }
+    else
+    {
+        bIsMoving = false;
     }
 }
 
@@ -116,13 +153,29 @@ void UTimeRewindComponent::StartTimeRewind()
 {
     if (!bIsRewinding)
     {
+        OnRewindStart.Broadcast();
         bIsRewinding = true;
         RewindProgress = 0.0f;
+        RewindStartTime = GetWorld()->GetTimeSeconds();
+
+        // Create a backup of the current history to use during rewind
+        OriginalHistory = TimeHistory;
     }
 }
 
 void UTimeRewindComponent::StopTimeRewind()
 {
-    bIsRewinding = false;
-    RewindProgress = 0.0f;
+    if (bIsRewinding)
+    {
+        OnRewindStop.Broadcast();
+        bIsRewinding = false;
+        RewindProgress = 0.0f;
+        
+        // Clear the history and start fresh after a rewind
+        TimeHistory.Empty();
+        OriginalHistory.Empty();
+        
+        float RewindDurationn = GetWorld()->GetTimeSeconds() - RewindStartTime;
+        UE_LOG(LogTemp, Log, TEXT("Rewind finished in %.2f seconds"), RewindDurationn);
+    }
 }

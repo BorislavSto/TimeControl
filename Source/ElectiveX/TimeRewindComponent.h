@@ -18,7 +18,12 @@ struct FTimeState
 
     UPROPERTY()
     double Timestamp;
+    
+    UPROPERTY()
+    bool bWasMoving;
 };
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FRewindEvent);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ELECTIVEX_API UTimeRewindComponent : public UActorComponent
@@ -28,19 +33,15 @@ class ELECTIVEX_API UTimeRewindComponent : public UActorComponent
 public:    
     UTimeRewindComponent();
 
-    // Maximum number of states to store
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time Travel")
-    int32 MaxHistoryStates = 250; // Stores up to 4 seconds at 60 FPS
+    int32 MaxHistoryStates = 250; 
 
-    // How often to record states (in seconds)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time Travel")
-    float RecordInterval = 0.016f; // Approximately 60 FPS
+    float RecordInterval = 0.016f;
 
-    // Rewind duration in seconds
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time Travel")
     float RewindDuration = 4.0f;
 
-    // Transition time for rewinding
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time Travel")
     float RewindTransitionTime = 2.0f;
 
@@ -50,26 +51,30 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Time Travel")
     void StopTimeRewind();
 
+    UPROPERTY(BlueprintAssignable, Category = "Time Rewind")
+    FRewindEvent OnRewindStart;
+
+    UPROPERTY(BlueprintAssignable, Category = "Time Rewind")
+    FRewindEvent OnRewindStop;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time Rewind")
+    bool bIsMoving;
+
 protected:
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+    FTimeState* FindStateAtTime(float TargetTime);
 
 private:
-    // Circular buffer to store object states
     TArray<FTimeState> TimeHistory;
+    TArray<FTimeState> OriginalHistory;
 
-    // Timer to track state recording
     float RecordTimer = 0.0f;
-
-    // Is currently rewinding?
     bool bIsRewinding = false;
-
-    // Current rewind progress
     float RewindProgress = 0.0f;
 
-    // Record the current state of the object
     void RecordState();
-
-    // Interpolate to a previous state
     void InterpolateToState(const FTimeState& TargetState);
+
+    double RewindStartTime;
 };

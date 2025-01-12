@@ -49,12 +49,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* LookAction;
 	
-	/** Time Rewind Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* RewindAction;
 	
 	UPROPERTY(EditAnywhere, Category = "Time Rewind")
-	float RewindCooldownDuration = 5.0f;  // Cooldown duration in seconds
+	float RewindCooldownDuration = 5.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Time Rewind")
 	TSubclassOf<UCameraShakeBase> RewindCameraShake;
@@ -65,23 +64,17 @@ public:
 	void OnRewindSuccessful();
 
 protected:
-	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
 	
-	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
 	void Rewind();
 
 protected:
-	// APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	// End of APawn interface
 
 public:
-	/** Returns Mesh1P subobject **/
 	USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
-	/** Returns FirstPersonCameraComponent subobject **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
 };

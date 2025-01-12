@@ -143,37 +143,29 @@ void AElectiveXCharacter::Rewind()
 		}
 	}
 
-	// Only start cooldown if at least one actor was rewound
 	if (RewindedActorsCount > 0)
 	{
-		// Start cooldown timer
 		GetWorld()->GetTimerManager().SetTimer(
 			RewindCooldownTimerHandle, 
 			RewindCooldownDuration, 
 			false  // Does not loop
 		);
 
-		// Optional: Add any additional effects (screen flash, sound, etc.)
+		// maybe add any additional effects
 		OnRewindSuccessful();
 	}
 }
 
 void AElectiveXCharacter::OnRewindSuccessful()
 {
-	;
-	// Optional: Add screen effects, sounds, etc.
 	if (RewindCameraShake)
 	{
 		GetWorld()->GetFirstPlayerController()->PlayerCameraManager->StartCameraShake(RewindCameraShake);
 	}
 
 	// USoundBase* RewindSound;
-	// // Play rewind sound
 	// if (RewindSound)
 	// {
 	// 	UGameplayStatics::PlaySound2D(this, RewindSound);
 	// }
-
-	// Optional visual feedback
-	// This could be a screen flash, particle effect, etc.
 }
